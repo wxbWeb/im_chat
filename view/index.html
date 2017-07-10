@@ -6,9 +6,18 @@
 	<link rel="stylesheet" type="text/css" href="css/style.css"/>
 </head>
 <body>
+
+	<!--登录界面-->
+	<div class="login_box">
+		<div class="login">
+			<input id="user_name" placeholder=" 输入一个账号">
+			<input id="user_nick" placeholder="输入账号昵称">
+			<button id="loginBtn">创建账号并进入聊天室</button>
+		</div>
+	</div>
+
 	<!--聊天容器-->
 	<div class="im_area" id="im_container">
-		
 		<!--主面板 S-->
 		<div class="wang-im-main wang-drap-move">
 			
@@ -252,12 +261,118 @@
 	</div>
 	
 </body>
+<script src="js/lib/sha1.min.js"></script>
+<script src="js/lib/jquery-1.8.3.min.js"></script>
+<script src="js/lib/NIM_Web_SDK_v3.9.1.js"></script>
 <script src="js/wang-functions.js" type="text/javascript" charset="utf-8"></script>
 <script type="text/javascript">
-	var wang = W();
-	new wang.Drag({
-		dragEle : '.wang-drap-elem',
-		dragTarget : '.wang-drap-move'
+	var w = W();
+	var user_info = JSON.parse(window.localStorage.getItem('user'));
+    //初始化服务端API
+    var imApi = new w.Server();
+	//初始化拖拽
+	new w.Drag({ dragEle : '.wang-drap-elem', dragTarget : '.wang-drap-move' });
+	//判断是否登录
+	if(user_info || user_info.info.token){
+		//打开聊天室
+        openChat();
+	};
+
+	//登录按钮
+	var loginBtn = w.q('#loginBtn');
+	var user_name = w.q('#user_name');
+	var user_nick = w.q('#user_nick');
+	//点击登录
+	loginBtn.addEventListener('click',function(){
+		var name = user_name.value;
+		var nick = user_nick.value;
+		if(!name){
+		    alert(user_name.placeholder);
+		    return;
+		};
+
+        var user = {
+            accid : name,
+            name : nick
+        };
+
+		//创建账号
+        imApi.createId(user,function(res){
+            //创建账号成功
+            if(res.code == 200){
+				//保存用户信息
+				var jsonString = JSON.stringify(res.info);
+				window.localStorage.setItem('user',jsonString);
+				//打开聊天室
+				openChat();
+			}else{
+                var msg = '';
+                if(res.desc == 'already register'){
+                    msg = '账号已存在';
+				};
+                alert('登录出错 错误代码：' + res.code + '\r\n错误信息:' + msg);
+			}
+		});
 	});
+
+function openChat() {
+    //关闭登录页
+    w.q('.login_box').style.display = 'none';
+    console.log('连接聊天室中');
+    //连接云信服务器
+    var NIM = SDK.NIM;
+    var Chatroom = SDK.Chatroom;
+	var user = JSON.parse(window.localStorage.getItem('user'));
+    var nim = NIM.getInstance({
+        // debug: true,
+        appKey: w.key,
+        account: user.accid,
+        token: user.token,
+        onconnect: onConnect,
+        onwillreconnect: onWillReconnect,
+        ondisconnect: onDisconnect,
+        onerror: onError
+    });
+
+    //连接成功
+	function onConnect(){
+	    console.log('连接成功');
+	};
+	//断开连接,正在重连
+    function onWillReconnect(obj) {
+        // 此时说明 SDK 已经断开连接, 请开发者在界面上提示用户连接已断开, 而且正在重新建立连接
+        console.log('即将重连');
+        console.log(obj.retryCount);
+        console.log(obj.duration);
+    };
+    //连接中断
+    function onDisconnect(error) {
+        // 此时说明 SDK 处于断开状态, 开发者此时应该根据错误码提示相应的错误信息, 并且跳转到登录页面
+        console.log('连接中断');
+        console.log(error);
+        if (error) {
+            switch (error.code) {
+                // 账号或者密码错误, 请跳转到登录页面并提示错误
+                case 302:
+                    console.log('账号或者密码错误');
+                    break;
+                // 重复登录, 已经在其它端登录了, 请跳转到登录页面并提示错误
+                case 417:
+                    console.log('重复登录');
+                    break;
+                // 被踢, 请提示错误后跳转到登录页面
+                case 'kicked':
+                    console.log('被踢');
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
+    //连接出错
+    function onError(error) {
+        console.log(error);
+    };
+}
 </script>
 </html>
